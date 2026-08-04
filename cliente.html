@@ -93,16 +93,20 @@
 <script src="firebase-config.js"></script>
 <script>
 function brl(v){ return 'R$ ' + (Number(v)||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
-function inicioSemanaISO(d = new Date()){
-  const dt = new Date(d); const dia = dt.getDay();
-  dt.setDate(dt.getDate() - dia); dt.setHours(0,0,0,0);
-  return dt.toISOString().slice(0,10);
+function toLocalISO(d){
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
 }
-function gerarUltimasSemanas(n=6){
-  const semanas = []; const hoje = new Date();
-  const domingo = new Date(hoje); domingo.setDate(hoje.getDate() - hoje.getDay());
-  for(let i=0; i<n; i++){ const d = new Date(domingo); d.setDate(domingo.getDate() - i*7); semanas.push(d.toISOString().slice(0,10)); }
-  return semanas.reverse();
+function hojeISO(){ return toLocalISO(new Date()); }
+function gerarVencimentos(diaVencimento, n=6){
+  diaVencimento = Number(diaVencimento);
+  if(isNaN(diaVencimento)) diaVencimento = 0;
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const diff = (hoje.getDay() - diaVencimento + 7) % 7;
+  const maisRecente = new Date(hoje); maisRecente.setDate(hoje.getDate() - diff);
+  const datas = [];
+  for(let i=0; i<n; i++){ const d = new Date(maisRecente); d.setDate(maisRecente.getDate() - i*7); datas.push(toLocalISO(d)); }
+  return datas.reverse();
 }
 function fmtSemana(iso){ const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}); }
 function categoriaLabel(c){ return { manutencao:'Manutenção', combustivel:'Combustível', documentacao:'Documentação', pneu:'Pneu', outro:'Outro' }[c] || c; }
@@ -124,11 +128,12 @@ if(!locId){
     document.getElementById('sub-carro').textContent = `${loc.carro || ''} ${loc.placa ? '· '+loc.placa : ''}`;
 
     const pagamentos = loc.pagamentos || {};
-    const semanas = gerarUltimasSemanas(6);
+    const hoje = hojeISO();
+    const semanas = gerarVencimentos(loc.diaVencimento, 6);
     let emAberto = 0;
     semanas.forEach(s => {
       const pago = pagamentos[s] && pagamentos[s].pago;
-      if(!pago && new Date(s) < new Date(inicioSemanaISO())) emAberto += Number(loc.valorSemanal)||0;
+      if(!pago && s < hoje) emAberto += Number(loc.valorSemanal)||0;
     });
     const valorEl = document.getElementById('status-valor');
     const labelEl = document.getElementById('status-label');
@@ -142,7 +147,7 @@ if(!locId){
 
     document.getElementById('weeks-list').innerHTML = semanas.map(sem => {
       const pago = pagamentos[sem] && pagamentos[sem].pago;
-      const atrasado = !pago && new Date(sem) < new Date(inicioSemanaISO());
+      const atrasado = !pago && sem < hoje;
       const cls = pago ? 'pago' : (atrasado ? 'atrasado' : '');
       return `<div class="week-chip ${cls}">${fmtSemana(sem)}</div>`;
     }).join('');
