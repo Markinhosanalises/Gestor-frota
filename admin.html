@@ -557,6 +557,7 @@
       </div>
       <div class="detail-section">
         <h4>Semanas (clique pra marcar pago/não pago)</h4>
+        <div class="cell-sub" id="det-proximo" style="margin-bottom:10px;"></div>
         <div class="weeks" id="det-weeks"></div>
       </div>
       <div class="detail-section">
@@ -653,6 +654,15 @@ function gerarVencimentos(diaVencimento, n=6){
   const datas = [];
   for(let i=0; i<n; i++){ const d = new Date(maisRecente); d.setDate(maisRecente.getDate() - i*7); datas.push(toLocalISO(d)); }
   return datas.reverse();
+}
+// Data do próximo vencimento (hoje ou futuro) — o oposto de gerarVencimentos, que só olha pro passado
+function proximoVencimento(diaVencimento){
+  diaVencimento = Number(diaVencimento);
+  if(isNaN(diaVencimento)) diaVencimento = 0;
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const diff = (diaVencimento - hoje.getDay() + 7) % 7;
+  const proximo = new Date(hoje); proximo.setDate(hoje.getDate() + diff);
+  return toLocalISO(proximo);
 }
 function fmtSemana(iso){ return parseLocal(iso).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}); }
 function iniciais(nome){ return (nome||'?').trim().split(/\s+/).slice(0,2).map(p=>p[0]).join('').toUpperCase(); }
@@ -777,7 +787,10 @@ function renderLocatarios(){
       </td>
       <td>${loc.whatsapp || '-'}</td>
       <td class="mono">${brl(loc.valorSemanal)}</td>
-      <td>${emDia ? '<span class="badge ok">Em dia</span>' : `<span class="badge late">Em aberto</span>`}</td>
+      <td>
+        ${emDia ? '<span class="badge ok">Em dia</span>' : `<span class="badge late">Em aberto</span>`}
+        <div class="cell-sub">Próximo: ${fmtSemana(proximoVencimento(loc.diaVencimento))}</div>
+      </td>
       <td><div class="dots">${dotsHtml}</div></td>
       <td>
         <div class="actions-cell">
@@ -820,6 +833,7 @@ function renderDetalhes(id){
 
   const pagamentos = loc.pagamentos || {};
   const hoje = hojeISO();
+  document.getElementById('det-proximo').textContent = `Próximo vencimento: ${fmtSemana(proximoVencimento(loc.diaVencimento))}`;
   const semanas = gerarVencimentos(loc.diaVencimento, 8);
   document.getElementById('det-weeks').innerHTML = semanas.map(sem => {
     const pago = pagamentos[sem] && pagamentos[sem].pago;
