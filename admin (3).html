@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel da Frota</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+  :root{
+    --bg: #12141A;
+    --surface: #1B1F27;
+    --surface-2: #222733;
+    --border: #2A2F3A;
+    --amber: #E8A33D;
+    --amber-dim: #6b5326;
+    --green: #4FBF7A;
+    --green-dim: #1e3a2b;
+    --red: #E8615D;
+    --red-dim: #3d2323;
+    --text: #F0F1F3;
+    --text-muted: #8B92A3;
+    --text-faint: #565D6B;
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    min-height:100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection{ background: var(--amber-dim); }
+
+  /* ---------- LOGIN ---------- */
+  #login-screen{
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    flex-direction:column; gap:24px; padding:24px;
+  }
+  #login-screen .brand{
+    font-family: var(--font-display); font-weight:700; font-size:28px;
+    letter-spacing:-0.02em; display:flex; align-items:center; gap:10px;
+  }
+  #login-screen .brand .dot{ width:10px; height:10px; border-radius:50%; background:var(--amber); box-shadow:0 0 12px var(--amber);}
+  #pin-input{
+    background: var(--surface); border:1px solid var(--border); color:var(--text);
+    font-family: var(--font-mono); font-size:28px; letter-spacing:12px; text-align:center;
+    padding:16px 20px; border-radius:12px; width:240px; outline:none;
+  }
+  #pin-input:focus{ border-color: var(--amber); }
+  #login-btn{
+    background: var(--amber); color:#1a1305; border:none; font-family:var(--font-display);
+    font-weight:700; font-size:15px; padding:14px 32px; border-radius:10px; cursor:pointer;
+    transition: transform .15s ease;
+  }
+  #login-btn:hover{ transform: translateY(-1px); }
+  #login-error{ color: var(--red); font-size:13px; height:16px; }
+
+  /* ---------- APP SHELL ---------- */
+  #app{ display:none; }
+  header.topbar{
+    padding: 20px 28px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;
+  }
+  .brand-mini{ font-family: var(--font-display); font-weight:700; font-size:18px; display:flex; align-items:center; gap:8px;}
+  .brand-mini .dot{ width:8px; height:8px; border-radius:50%; background:var(--amber); }
+
+  /* ---------- INSTRUMENT CLUSTER ---------- */
+  .cluster{
+    display:grid; grid-template-columns: repeat(4, 1fr);
+    border-bottom:1px solid var(--border); background: var(--surface);
+  }
+  .gauge{
+    padding: 22px 24px; border-right:1px solid var(--border); position:relative;
+  }
+  .gauge:last-child{ border-right:none; }
+  .gauge .value{
+    font-family: var(--font-mono); font-weight:700; font-size:26px; letter-spacing:-0.02em;
+  }
+  .gauge .label{
+    font-size:11px; text-transform:uppercase; letter-spacing:0.12em; color:var(--text-muted); margin-top:6px;
+  }
+  .gauge.recebido .value{ color: var(--green); }
+  .gauge.aberto .value{ color: var(--amber); }
+  .gauge.despesas .value{ color: var(--red); }
+  .gauge .needle{ position:absolute; bottom:0; left:0; height:2px; background: currentColor; width:0%; transition: width .6s ease; }
+  .gauge.recebido .needle{ color: var(--green); }
+  .gauge.aberto .needle{ color: var(--amber); }
+  .gauge.despesas .needle{ color: var(--red); }
+  .gauge.saldo .needle{ color: var(--text); }
+
+  /* ---------- TABS ---------- */
+  .tabs{ display:flex; gap:4px; padding: 16px 28px 0; border-bottom:1px solid var(--border); }
+  .tab{
+    padding:10px 18px; font-family:var(--font-display); font-weight:600; font-size:14px;
+    color:var(--text-muted); cursor:pointer; border-bottom:2px solid transparent; user-select:none;
+  }
+  .tab.active{ color:var(--text); border-bottom-color: var(--amber); }
+
+  main{ padding: 24px 28px 80px; max-width:1100px; margin:0 auto; }
+  .view{ display:none; }
+  .view.active{ display:block; }
+
+  .row-between{ display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; flex-wrap:wrap; gap:12px;}
+  h2{ font-family:var(--font-display); font-size:20px; font-weight:600; }
+  .btn{
+    background: var(--surface-2); color:var(--text); border:1px solid var(--border);
+    font-family:var(--font-body); font-weight:600; font-size:13px; padding:10px 16px;
+    border-radius:8px; cursor:pointer; transition: border-color .15s ease;
+  }
+  .btn:hover{ border-color: var(--amber); }
+  .btn-primary{ background: var(--amber); color:#1a1305; border:none; }
+  .btn-primary:hover{ opacity:.9; }
+  .btn-danger{ color: var(--red); }
+  .btn-sm{ padding:6px 12px; font-size:12px; }
+
+  /* ---------- CARDS ---------- */
+  .card{
+    background: var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:20px; margin-bottom:14px;
+  }
+  .loc-card{ display:flex; flex-direction:column; gap:14px; }
+  .loc-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;}
+  .loc-name{ font-family:var(--font-display); font-weight:600; font-size:17px; }
+  .loc-sub{ color:var(--text-muted); font-size:13px; margin-top:2px; }
+  .badge{
+    font-size:11px; font-weight:600; padding:4px 10px; border-radius:999px; text-transform:uppercase; letter-spacing:.04em;
+  }
+  .badge.ok{ background: var(--green-dim); color: var(--green); }
+  .badge.late{ background: var(--red-dim); color: var(--red); }
+  .badge.neutral{ background: var(--surface-2); color: var(--text-muted); }
+
+  .loc-stats{ display:flex; gap:24px; flex-wrap:wrap; }
+  .stat{ font-family:var(--font-mono); }
+  .stat .n{ font-size:16px; font-weight:700; }
+  .stat .l{ font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.08em; }
+  .loc-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .link-box{
+    display:flex; align-items:center; gap:8px; background:var(--surface-2); border:1px solid var(--border);
+    border-radius:8px; padding:8px 10px; font-family:var(--font-mono); font-size:11px; color:var(--text-muted);
+    overflow:hidden;
+  }
+  .link-box span{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* weeks strip */
+  .weeks{ display:flex; gap:6px; flex-wrap:wrap; }
+  .week-chip{
+    font-family: var(--font-mono); font-size:11px; padding:7px 10px; border-radius:7px;
+    border:1px solid var(--border); cursor:pointer; background:var(--surface-2); color:var(--text-muted);
+    transition: all .15s ease;
+  }
+  .week-chip.pago{ background: var(--green-dim); color: var(--green); border-color: transparent; }
+  .week-chip.atrasado{ background: var(--red-dim); color: var(--red); border-color: transparent; }
+
+  /* table (despesas) */
+  table{ width:100%; border-collapse: collapse; }
+  th{
+    text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted);
+    padding:10px 12px; border-bottom:1px solid var(--border); font-weight:600;
+  }
+  td{ padding:12px; border-bottom:1px solid var(--border); font-size:13px; vertical-align:top; }
+  tr:last-child td{ border-bottom:none; }
+  .tag{ font-size:11px; padding:3px 8px; border-radius:6px; background:var(--surface-2); color:var(--text-muted); display:inline-block; }
+  .mono{ font-family:var(--font-mono); }
+
+  .empty{ text-align:center; padding:50px 20px; color:var(--text-faint); }
+  .empty .big{ font-family:var(--font-display); font-size:16px; color:var(--text-muted); margin-bottom:6px; }
+
+  /* ---------- MODAL ---------- */
+  .modal-overlay{
+    display:none; position:fixed; inset:0; background:rgba(10,11,14,.7); backdrop-filter: blur(2px);
+    align-items:center; justify-content:center; z-index:100; padding:16px;
+  }
+  .modal-overlay.active{ display:flex; }
+  .modal{
+    background: var(--surface); border:1px solid var(--border); border-radius:16px;
+    width:100%; max-width:480px; max-height:90vh; overflow-y:auto; padding:24px;
+  }
+  .modal h3{ font-family:var(--font-display); font-size:18px; margin-bottom:18px; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:12px; color:var(--text-muted); margin-bottom:6px; font-weight:600; }
+  .field input, .field select{
+    width:100%; background: var(--surface-2); border:1px solid var(--border); color:var(--text);
+    padding:11px 12px; border-radius:8px; font-family:var(--font-body); font-size:14px; outline:none;
+  }
+  .field input:focus, .field select:focus{ border-color: var(--amber); }
+  .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .radio-group{ display:flex; gap:8px; flex-wrap:wrap; }
+  .radio-opt{
+    flex:1; text-align:center; padding:10px; border:1px solid var(--border); border-radius:8px;
+    cursor:pointer; font-size:13px; color:var(--text-muted); font-weight:600; min-width:80px;
+  }
+  .radio-opt.selected{ border-color:var(--amber); color:var(--amber); background: var(--amber-dim); }
+  .modal-actions{ display:flex; gap:10px; margin-top:20px; }
+  .modal-actions .btn{ flex:1; text-align:center; }
+  .hidden{ display:none !important; }
+
+  @media (max-width: 640px){
+    .cluster{ grid-template-columns: repeat(2, 1fr); }
+    .gauge{ border-bottom:1px solid var(--border); }
+    main{ padding: 20px 16px 80px; }
+    header.topbar{ padding:16px; }
+    .field-row{ grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="brand"><span class="dot"></span> Painel da Frota</div>
+  <input id="pin-input" type="password" inputmode="numeric" maxlength="6" placeholder="••••">
+  <button id="login-btn">Entrar</button>
+  <div id="login-error"></div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <header class="topbar">
+    <div class="brand-mini"><span class="dot"></span> Painel da Frota</div>
+    <button class="btn btn-sm" onclick="logout()">Sair</button>
+  </header>
+
+  <div class="cluster">
+    <div class="gauge recebido">
+      <div class="value mono" id="g-recebido">R$ 0</div>
+      <div class="label">Recebido no mês</div>
+      <div class="needle" id="n-recebido"></div>
+    </div>
+    <div class="gauge aberto">
+      <div class="value mono" id="g-aberto">R$ 0</div>
+      <div class="label">Em aberto</div>
+      <div class="needle" id="n-aberto"></div>
+    </div>
+    <div class="gauge despesas">
+      <div class="value mono" id="g-despesas">R$ 0</div>
+      <div class="label">Despesas do mês</div>
+      <div class="needle" id="n-despesas"></div>
+    </div>
+    <div class="gauge saldo">
+      <div class="value mono" id="g-saldo">R$ 0</div>
+      <div class="label">Saldo líquido</div>
+      <div class="needle" id="n-saldo"></div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-view="v-locatarios">Locatários</div>
+    <div class="tab" data-view="v-despesas">Despesas</div>
+  </div>
+
+  <main>
+    <!-- LOCATARIOS -->
+    <div class="view active" id="v-locatarios">
+      <div class="row-between">
+        <h2>Locatários & carros</h2>
+        <button class="btn btn-primary" onclick="openLocatarioModal()">+ Novo locatário</button>
+      </div>
+      <div id="lista-locatarios"></div>
+    </div>
+
+    <!-- DESPESAS -->
+    <div class="view" id="v-despesas">
+      <div class="row-between">
+        <h2>Despesas</h2>
+        <button class="btn btn-primary" onclick="openDespesaModal()">+ Nova despesa</button>
+      </div>
+      <div class="card" style="padding:0; overflow-x:auto;">
+        <table id="tabela-despesas">
+          <thead>
+            <tr>
+              <th>Data</th><th>Locatário</th><th>Descrição</th><th>Categoria</th>
+              <th>Pagamento</th><th>Divisão</th><th>Valor</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="despesas-body"></tbody>
+        </table>
+        <div class="empty hidden" id="despesas-empty">
+          <div class="big">Nenhuma despesa lançada</div>
+          <div>Registre manutenções, combustível e outros custos aqui.</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- MODAL LOCATARIO -->
+<div class="modal-overlay" id="modal-locatario">
+  <div class="modal">
+    <h3 id="loc-modal-title">Novo locatário</h3>
+    <input type="hidden" id="loc-id">
+    <div class="field"><label>Nome</label><input id="loc-nome" placeholder="Nome do locatário"></div>
+    <div class="field"><label>WhatsApp</label><input id="loc-whats" placeholder="(21) 90000-0000"></div>
+    <div class="field-row">
+      <div class="field"><label>Carro (modelo)</label><input id="loc-carro" placeholder="Ex: Onix 2020"></div>
+      <div class="field"><label>Placa</label><input id="loc-placa" placeholder="ABC1D23"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Valor semanal (R$)</label><input id="loc-valor" type="number" step="0.01" placeholder="600"></div>
+      <div class="field">
+        <label>Dia de vencimento</label>
+        <select id="loc-dia">
+          <option value="1">Segunda</option><option value="2">Terça</option><option value="3">Quarta</option>
+          <option value="4">Quinta</option><option value="5">Sexta</option><option value="6">Sábado</option>
+          <option value="0">Domingo</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-locatario')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarLocatario()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DESPESA -->
+<div class="modal-overlay" id="modal-despesa">
+  <div class="modal">
+    <h3>Nova despesa</h3>
+    <div class="field">
+      <label>Locatário / carro</label>
+      <select id="desp-locatario"></select>
+    </div>
+    <div class="field"><label>Descrição</label><input id="desp-desc" placeholder="Ex: Troca de óleo"></div>
+    <div class="field-row">
+      <div class="field">
+        <label>Categoria</label>
+        <select id="desp-categoria">
+          <option value="manutencao">Manutenção</option>
+          <option value="combustivel">Combustível</option>
+          <option value="documentacao">Documentação</option>
+          <option value="pneu">Pneu</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+      <div class="field"><label>Data</label><input id="desp-data" type="date"></div>
+    </div>
+    <div class="field"><label>Valor total (R$)</label><input id="desp-valor" type="number" step="0.01" placeholder="0,00"></div>
+
+    <div class="field">
+      <label>Forma de pagamento</label>
+      <div class="radio-group" id="desp-forma-group">
+        <div class="radio-opt selected" data-val="dinheiro">Dinheiro/PIX</div>
+        <div class="radio-opt" data-val="cartao">Cartão</div>
+      </div>
+    </div>
+
+    <div id="desp-parcelas-box" class="field-row hidden">
+      <div class="field"><label>Nº de parcelas</label><input id="desp-parcelas" type="number" min="1" value="1"></div>
+      <div class="field"><label>Valor por parcela</label><input id="desp-valor-parcela" type="text" disabled></div>
+    </div>
+
+    <div class="field">
+      <label>Divisão da despesa</label>
+      <div class="radio-group" id="desp-divisao-group">
+        <div class="radio-opt selected" data-val="dividido">Dividido 50/50</div>
+        <div class="radio-opt" data-val="eu">Só eu pago</div>
+        <div class="radio-opt" data-val="ele">Só ele paga</div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-despesa')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarDespesa()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script src="firebase-config.js"></script>
+<script>
+// ============================================
+// AUTH SIMPLES POR PIN (client-side)
+// ============================================
+function checkLogin(){
+  if(sessionStorage.getItem('frota_admin_ok') === '1'){
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    iniciarApp();
+  }
+}
+document.getElementById('login-btn').onclick = tentarLogin;
+document.getElementById('pin-input').addEventListener('keydown', e => { if(e.key === 'Enter') tentarLogin(); });
+function tentarLogin(){
+  const val = document.getElementById('pin-input').value;
+  if(val === ADMIN_PIN){
+    sessionStorage.setItem('frota_admin_ok', '1');
+    document.getElementById('login-error').textContent = '';
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    iniciarApp();
+  } else {
+    document.getElementById('login-error').textContent = 'PIN incorreto';
+  }
+}
+function logout(){ sessionStorage.removeItem('frota_admin_ok'); location.reload(); }
+
+// ============================================
+// TABS
+// ============================================
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.view).classList.add('active');
+  };
+});
+
+// ============================================
+// ESTADO
+// ============================================
+let locatarios = {};
+let despesasFlat = [];
+
+function iniciarApp(){
+  db.ref('locatarios').on('value', snap => {
+    locatarios = snap.val() || {};
+    renderLocatarios();
+    renderDespesas();
+    renderCluster();
+    popularSelectLocatarios();
+  });
+}
+
+// ============================================
+// HELPERS
+// ============================================
+function brl(v){ return 'R$ ' + (Number(v)||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function inicioSemanaISO(d = new Date()){
+  const dt = new Date(d);
+  const dia = dt.getDay();
+  dt.setDate(dt.getDate() - dia); // domingo como início
+  dt.setHours(0,0,0,0);
+  return dt.toISOString().slice(0,10);
+}
+function mesAtual(){ return new Date().toISOString().slice(0,7); }
+
+function gerarUltimasSemanas(n=6){
+  const semanas = [];
+  const hoje = new Date();
+  const domingo = new Date(hoje); domingo.setDate(hoje.getDate() - hoje.getDay());
+  for(let i=0; i<n; i++){
+    const d = new Date(domingo); d.setDate(domingo.getDate() - i*7);
+    semanas.push(d.toISOString().slice(0,10));
+  }
+  return semanas.reverse();
+}
+function fmtSemana(iso){
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'});
+}
+
+// ============================================
+// RENDER LOCATARIOS
+// ============================================
+function renderLocatarios(){
+  const container = document.getElementById('lista-locatarios');
+  const ids = Object.keys(locatarios);
+  if(ids.length === 0){
+    container.innerHTML = `<div class="card empty"><div class="big">Nenhum locatário cadastrado</div><div>Cadastre o primeiro pra começar a controlar pagamentos e despesas.</div></div>`;
+    return;
+  }
+  container.innerHTML = ids.map(id => {
+    const loc = locatarios[id];
+    const pagamentos = loc.pagamentos || {};
+    const semanas = gerarUltimasSemanas(6);
+    const semanasHtml = semanas.map(sem => {
+      const key = sem;
+      const pago = pagamentos[key] && pagamentos[key].pago;
+      const atrasado = !pago && new Date(sem) < new Date(inicioSemanaISO());
+      const cls = pago ? 'pago' : (atrasado ? 'atrasado' : '');
+      return `<div class="week-chip ${cls}" onclick="toggleSemana('${id}','${key}')">${fmtSemana(sem)}</div>`;
+    }).join('');
+
+    const semanasEmAberto = semanas.filter(s => !(pagamentos[s] && pagamentos[s].pago) && new Date(s) < new Date(inicioSemanaISO())).length;
+    const valorEmAberto = semanasEmAberto * (Number(loc.valorSemanal)||0);
+
+    const link = location.origin + location.pathname.replace('admin.html','') + 'cliente.html?id=' + id;
+
+    return `
+    <div class="card loc-card">
+      <div class="loc-head">
+        <div>
+          <div class="loc-name">${loc.nome || '(sem nome)'}</div>
+          <div class="loc-sub">${loc.carro || ''} ${loc.placa ? '· '+loc.placa : ''} ${loc.whatsapp ? '· '+loc.whatsapp : ''}</div>
+        </div>
+        <div>
+          ${valorEmAberto > 0 ? `<span class="badge late">${brl(valorEmAberto)} em aberto</span>` : `<span class="badge ok">Em dia</span>`}
+        </div>
+      </div>
+      <div class="loc-stats">
+        <div class="stat"><div class="n">${brl(loc.valorSemanal)}</div><div class="l">Por semana</div></div>
+        <div class="stat"><div class="n">${diaSemanaLabel(loc.diaVencimento)}</div><div class="l">Vencimento</div></div>
+      </div>
+      <div>
+        <div class="loc-sub" style="margin-bottom:8px;">Últimas semanas (clique pra marcar pago/não pago)</div>
+        <div class="weeks">${semanasHtml}</div>
+      </div>
+      <div class="link-box">
+        <span id="link-${id}">${link}</span>
+        <button class="btn btn-sm" onclick="copiarLink('${id}')">Copiar link</button>
+      </div>
+      <div class="loc-actions">
+        <button class="btn btn-sm" onclick="openLocatarioModal('${id}')">Editar</button>
+        <button class="btn btn-sm btn-danger" onclick="removerLocatario('${id}')">Remover</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function diaSemanaLabel(n){
+  return ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'][Number(n)] || '-';
+}
+
+function toggleSemana(locId, semana){
+  const ref = db.ref(`locatarios/${locId}/pagamentos/${semana}`);
+  const atual = (locatarios[locId].pagamentos || {})[semana];
+  if(atual && atual.pago){
+    ref.update({ pago: false, dataPagamento: null });
+  } else {
+    ref.update({
+      pago: true,
+      valor: locatarios[locId].valorSemanal,
+      dataPagamento: new Date().toISOString()
+    });
+  }
+}
+
+function copiarLink(id){
+  const text = document.getElementById('link-'+id).textContent;
+  navigator.clipboard.writeText(text).then(() => alert('Link copiado!'));
+}
+
+// ============================================
+// MODAL LOCATARIO
+// ============================================
+function openLocatarioModal(id){
+  document.getElementById('modal-locatario').classList.add('active');
+  if(id){
+    const loc = locatarios[id];
+    document.getElementById('loc-modal-title').textContent = 'Editar locatário';
+    document.getElementById('loc-id').value = id;
+    document.getElementById('loc-nome').value = loc.nome || '';
+    document.getElementById('loc-whats').value = loc.whatsapp || '';
+    document.getElementById('loc-carro').value = loc.carro || '';
+    document.getElementById('loc-placa').value = loc.placa || '';
+    document.getElementById('loc-valor').value = loc.valorSemanal || '';
+    document.getElementById('loc-dia').value = loc.diaVencimento ?? '1';
+  } else {
+    document.getElementById('loc-modal-title').textContent = 'Novo locatário';
+    ['loc-id','loc-nome','loc-whats','loc-carro','loc-placa','loc-valor'].forEach(f => document.getElementById(f).value = '');
+    document.getElementById('loc-dia').value = '1';
+  }
+}
+function closeModal(id){ document.getElementById(id).classList.remove('active'); }
+
+function salvarLocatario(){
+  const id = document.getElementById('loc-id').value;
+  const nome = document.getElementById('loc-nome').value.trim();
+  if(!nome){ alert('Digite o nome do locatário'); return; }
+  const data = {
+    nome,
+    whatsapp: document.getElementById('loc-whats').value.trim(),
+    carro: document.getElementById('loc-carro').value.trim(),
+    placa: document.getElementById('loc-placa').value.trim(),
+    valorSemanal: Number(document.getElementById('loc-valor').value) || 0,
+    diaVencimento: document.getElementById('loc-dia').value,
+    ativo: true
+  };
+  if(id){
+    db.ref('locatarios/'+id).update(data);
+  } else {
+    data.criadoEm = new Date().toISOString();
+    db.ref('locatarios').push(data);
+  }
+  closeModal('modal-locatario');
+}
+
+function removerLocatario(id){
+  if(confirm('Remover este locatário? Isso apaga todo o histórico dele.')){
+    db.ref('locatarios/'+id).remove();
+  }
+}
+
+// ============================================
+// DESPESAS
+// ============================================
+function popularSelectLocatarios(){
+  const sel = document.getElementById('desp-locatario');
+  const atual = sel.value;
+  sel.innerHTML = Object.keys(locatarios).map(id =>
+    `<option value="${id}">${locatarios[id].nome} — ${locatarios[id].carro || ''}</option>`
+  ).join('');
+  if(atual) sel.value = atual;
+}
+
+document.getElementById('desp-forma-group').addEventListener('click', e => {
+  const opt = e.target.closest('.radio-opt'); if(!opt) return;
+  document.querySelectorAll('#desp-forma-group .radio-opt').forEach(o => o.classList.remove('selected'));
+  opt.classList.add('selected');
+  const box = document.getElementById('desp-parcelas-box');
+  box.classList.toggle('hidden', opt.dataset.val !== 'cartao');
+  atualizarValorParcela();
+});
+document.getElementById('desp-divisao-group').addEventListener('click', e => {
+  const opt = e.target.closest('.radio-opt'); if(!opt) return;
+  document.querySelectorAll('#desp-divisao-group .radio-opt').forEach(o => o.classList.remove('selected'));
+  opt.classList.add('selected');
+});
+document.getElementById('desp-valor').addEventListener('input', atualizarValorParcela);
+document.getElementById('desp-parcelas').addEventListener('input', atualizarValorParcela);
+function atualizarValorParcela(){
+  const total = Number(document.getElementById('desp-valor').value) || 0;
+  const parc = Number(document.getElementById('desp-parcelas').value) || 1;
+  document.getElementById('desp-valor-parcela').value = brl(total / parc);
+}
+
+function openDespesaModal(){
+  document.getElementById('modal-despesa').classList.add('active');
+  document.getElementById('desp-desc').value = '';
+  document.getElementById('desp-valor').value = '';
+  document.getElementById('desp-data').value = new Date().toISOString().slice(0,10);
+  document.getElementById('desp-parcelas').value = 1;
+  document.getElementById('desp-parcelas-box').classList.add('hidden');
+  document.querySelectorAll('#desp-forma-group .radio-opt').forEach(o => o.classList.remove('selected'));
+  document.querySelector('#desp-forma-group [data-val="dinheiro"]').classList.add('selected');
+  document.querySelectorAll('#desp-divisao-group .radio-opt').forEach(o => o.classList.remove('selected'));
+  document.querySelector('#desp-divisao-group [data-val="dividido"]').classList.add('selected');
+  popularSelectLocatarios();
+}
+
+function salvarDespesa(){
+  const locId = document.getElementById('desp-locatario').value;
+  if(!locId){ alert('Cadastre um locatário primeiro'); return; }
+  const desc = document.getElementById('desp-desc').value.trim();
+  const valor = Number(document.getElementById('desp-valor').value) || 0;
+  if(!desc || valor <= 0){ alert('Preencha a descrição e o valor'); return; }
+  const forma = document.querySelector('#desp-forma-group .selected').dataset.val;
+  const divisao = document.querySelector('#desp-divisao-group .selected').dataset.val;
+  const parcelas = forma === 'cartao' ? Number(document.getElementById('desp-parcelas').value) || 1 : 1;
+
+  const data = {
+    descricao: desc,
+    categoria: document.getElementById('desp-categoria').value,
+    data: document.getElementById('desp-data').value,
+    valor,
+    formaPagamento: forma,
+    parcelas: parcelas,
+    valorParcela: valor / parcelas,
+    divisao,
+    criadoEm: new Date().toISOString()
+  };
+  db.ref(`locatarios/${locId}/despesas`).push(data);
+  closeModal('modal-despesa');
+}
+
+function renderDespesas(){
+  const body = document.getElementById('despesas-body');
+  const rows = [];
+  Object.keys(locatarios).forEach(locId => {
+    const desps = locatarios[locId].despesas || {};
+    Object.keys(desps).forEach(dId => {
+      rows.push({ locId, dId, nome: locatarios[locId].nome, ...desps[dId] });
+    });
+  });
+  rows.sort((a,b) => (b.data||'').localeCompare(a.data||''));
+  despesasFlat = rows;
+
+  document.getElementById('despesas-empty').classList.toggle('hidden', rows.length > 0);
+
+  body.innerHTML = rows.map(r => {
+    const pagamentoLabel = r.formaPagamento === 'cartao'
+      ? `Cartão · ${r.parcelas}x de ${brl(r.valorParcela)}`
+      : 'Dinheiro/PIX';
+    const divisaoLabel = { dividido: '50/50', eu: 'Só eu', ele: 'Só ele' }[r.divisao] || r.divisao;
+    const dataFmt = r.data ? new Date(r.data + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+    return `<tr>
+      <td class="mono">${dataFmt}</td>
+      <td>${r.nome}</td>
+      <td>${r.descricao}</td>
+      <td><span class="tag">${categoriaLabel(r.categoria)}</span></td>
+      <td>${pagamentoLabel}</td>
+      <td>${divisaoLabel}</td>
+      <td class="mono">${brl(r.valor)}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="removerDespesa('${r.locId}','${r.dId}')">×</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function categoriaLabel(c){
+  return { manutencao:'Manutenção', combustivel:'Combustível', documentacao:'Documentação', pneu:'Pneu', outro:'Outro' }[c] || c;
+}
+
+function removerDespesa(locId, dId){
+  if(confirm('Remover essa despesa?')){
+    db.ref(`locatarios/${locId}/despesas/${dId}`).remove();
+  }
+}
+
+// ============================================
+// CLUSTER (RESUMO FINANCEIRO)
+// ============================================
+function renderCluster(){
+  const mes = mesAtual();
+  let recebido = 0, aberto = 0, despesasMes = 0;
+
+  Object.keys(locatarios).forEach(id => {
+    const loc = locatarios[id];
+    const pagamentos = loc.pagamentos || {};
+    Object.keys(pagamentos).forEach(sem => {
+      if(sem.startsWith(mes) && pagamentos[sem].pago){
+        recebido += Number(pagamentos[sem].valor) || 0;
+      }
+    });
+    const semanas = gerarUltimasSemanas(6);
+    semanas.forEach(s => {
+      const pago = pagamentos[s] && pagamentos[s].pago;
+      if(!pago && new Date(s) < new Date(inicioSemanaISO())){
+        aberto += Number(loc.valorSemanal) || 0;
+      }
+    });
+    const desps = loc.despesas || {};
+    Object.keys(desps).forEach(dId => {
+      const d = desps[dId];
+      if((d.data||'').startsWith(mes)){
+        // considera apenas a parte que cabe a você (eu ou metade)
+        let minhaParte = d.valor;
+        if(d.divisao === 'dividido') minhaParte = d.valor / 2;
+        if(d.divisao === 'ele') minhaParte = 0;
+        despesasMes += minhaParte;
+      }
+    });
+  });
+
+  const saldo = recebido - despesasMes;
+  document.getElementById('g-recebido').textContent = brl(recebido);
+  document.getElementById('g-aberto').textContent = brl(aberto);
+  document.getElementById('g-despesas').textContent = brl(despesasMes);
+  document.getElementById('g-saldo').textContent = brl(saldo);
+
+  const max = Math.max(recebido, aberto, despesasMes, Math.abs(saldo), 1);
+  document.getElementById('n-recebido').style.width = Math.min(100, recebido/max*100) + '%';
+  document.getElementById('n-aberto').style.width = Math.min(100, aberto/max*100) + '%';
+  document.getElementById('n-despesas').style.width = Math.min(100, despesasMes/max*100) + '%';
+  document.getElementById('n-saldo').style.width = Math.min(100, Math.abs(saldo)/max*100) + '%';
+}
+
+checkLogin();
+</script>
+</body>
+</html>

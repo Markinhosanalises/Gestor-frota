@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meu painel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+  :root{
+    --bg: #12141A; --surface: #1B1F27; --surface-2: #222733; --border: #2A2F3A;
+    --amber: #E8A33D; --amber-dim: #6b5326; --green: #4FBF7A; --green-dim: #1e3a2b;
+    --red: #E8615D; --red-dim: #3d2323; --text: #F0F1F3; --text-muted: #8B92A3; --text-faint:#565D6B;
+    --font-display: 'Space Grotesk', sans-serif; --font-body: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{ background: var(--bg); color: var(--text); font-family: var(--font-body); min-height:100vh; -webkit-font-smoothing:antialiased; }
+  header{ padding:24px 20px; border-bottom:1px solid var(--border); }
+  .brand{ font-family: var(--font-display); font-weight:700; font-size:18px; display:flex; align-items:center; gap:8px;}
+  .brand .dot{ width:8px; height:8px; border-radius:50%; background:var(--amber); }
+  .subtitle{ color:var(--text-muted); font-size:13px; margin-top:4px; }
+
+  main{ max-width:680px; margin:0 auto; padding:24px 20px 60px; }
+  .status-card{
+    background: var(--surface); border:1px solid var(--border); border-radius:16px; padding:24px; margin-bottom:20px;
+    text-align:center;
+  }
+  .status-card .valor{ font-family:var(--font-mono); font-size:32px; font-weight:700; }
+  .status-card .valor.ok{ color: var(--green); }
+  .status-card .valor.late{ color: var(--red); }
+  .status-card .label{ color:var(--text-muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; margin-top:6px;}
+
+  h2{ font-family:var(--font-display); font-size:16px; margin:28px 0 12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; font-size:12px;}
+
+  .weeks{ display:flex; gap:6px; flex-wrap:wrap; }
+  .week-chip{
+    font-family: var(--font-mono); font-size:11px; padding:8px 12px; border-radius:7px;
+    border:1px solid var(--border); background:var(--surface-2); color:var(--text-muted);
+  }
+  .week-chip.pago{ background: var(--green-dim); color: var(--green); border-color:transparent; }
+  .week-chip.atrasado{ background: var(--red-dim); color: var(--red); border-color:transparent; }
+
+  .card{ background: var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:10px; }
+  .desp-row{ display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  .desp-desc{ font-weight:600; font-size:14px; }
+  .desp-meta{ color:var(--text-muted); font-size:12px; margin-top:4px; }
+  .desp-valor{ font-family:var(--font-mono); font-weight:700; font-size:14px; white-space:nowrap; }
+  .tag{ font-size:11px; padding:3px 8px; border-radius:6px; background:var(--surface-2); color:var(--text-muted); display:inline-block; margin-top:6px;}
+
+  .empty{ text-align:center; padding:40px 20px; color:var(--text-faint); }
+  #not-found{ display:none; text-align:center; padding:80px 20px; color:var(--text-muted); }
+</style>
+</head>
+<body>
+
+<div id="not-found">
+  <div style="font-family:var(--font-display); font-size:18px; color:var(--text);">Link inválido</div>
+  <div style="margin-top:8px;">Peça um novo link pra quem administra o painel.</div>
+</div>
+
+<div id="content" style="display:none;">
+  <header>
+    <div class="brand"><span class="dot"></span> Meu painel</div>
+    <div class="subtitle" id="sub-carro"></div>
+  </header>
+  <main>
+    <div class="status-card">
+      <div class="valor" id="status-valor">R$ 0</div>
+      <div class="label" id="status-label">Situação</div>
+    </div>
+
+    <h2>Últimas semanas</h2>
+    <div class="weeks" id="weeks-list"></div>
+
+    <h2>Despesas divididas com você</h2>
+    <div id="despesas-list"></div>
+  </main>
+</div>
+
+<script src="firebase-config.js"></script>
+<script>
+function brl(v){ return 'R$ ' + (Number(v)||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function inicioSemanaISO(d = new Date()){
+  const dt = new Date(d); const dia = dt.getDay();
+  dt.setDate(dt.getDate() - dia); dt.setHours(0,0,0,0);
+  return dt.toISOString().slice(0,10);
+}
+function gerarUltimasSemanas(n=6){
+  const semanas = []; const hoje = new Date();
+  const domingo = new Date(hoje); domingo.setDate(hoje.getDate() - hoje.getDay());
+  for(let i=0; i<n; i++){ const d = new Date(domingo); d.setDate(domingo.getDate() - i*7); semanas.push(d.toISOString().slice(0,10)); }
+  return semanas.reverse();
+}
+function fmtSemana(iso){ const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}); }
+function categoriaLabel(c){ return { manutencao:'Manutenção', combustivel:'Combustível', documentacao:'Documentação', pneu:'Pneu', outro:'Outro' }[c] || c; }
+
+const params = new URLSearchParams(location.search);
+const locId = params.get('id');
+
+if(!locId){
+  document.getElementById('not-found').style.display = 'block';
+} else {
+  db.ref('locatarios/' + locId).on('value', snap => {
+    const loc = snap.val();
+    if(!loc){
+      document.getElementById('not-found').style.display = 'block';
+      document.getElementById('content').style.display = 'none';
+      return;
+    }
+    document.getElementById('content').style.display = 'block';
+    document.getElementById('sub-carro').textContent = `${loc.carro || ''} ${loc.placa ? '· '+loc.placa : ''}`;
+
+    // status
+    const pagamentos = loc.pagamentos || {};
+    const semanas = gerarUltimasSemanas(6);
+    let emAberto = 0;
+    semanas.forEach(s => {
+      const pago = pagamentos[s] && pagamentos[s].pago;
+      if(!pago && new Date(s) < new Date(inicioSemanaISO())) emAberto += Number(loc.valorSemanal)||0;
+    });
+    const valorEl = document.getElementById('status-valor');
+    const labelEl = document.getElementById('status-label');
+    if(emAberto > 0){
+      valorEl.textContent = brl(emAberto); valorEl.className = 'valor late';
+      labelEl.textContent = 'Em aberto';
+    } else {
+      valorEl.textContent = 'Em dia'; valorEl.className = 'valor ok';
+      labelEl.textContent = `${brl(loc.valorSemanal)} por semana`;
+    }
+
+    // semanas
+    document.getElementById('weeks-list').innerHTML = semanas.map(sem => {
+      const pago = pagamentos[sem] && pagamentos[sem].pago;
+      const atrasado = !pago && new Date(sem) < new Date(inicioSemanaISO());
+      const cls = pago ? 'pago' : (atrasado ? 'atrasado' : '');
+      return `<div class="week-chip ${cls}">${fmtSemana(sem)}</div>`;
+    }).join('');
+
+    // despesas divididas ou dele
+    const desps = loc.despesas || {};
+    const ids = Object.keys(desps).filter(id => desps[id].divisao === 'dividido' || desps[id].divisao === 'ele');
+    ids.sort((a,b) => (desps[b].data||'').localeCompare(desps[a].data||''));
+    const listEl = document.getElementById('despesas-list');
+    if(ids.length === 0){
+      listEl.innerHTML = `<div class="empty">Nenhuma despesa dividida até agora</div>`;
+    } else {
+      listEl.innerHTML = ids.map(id => {
+        const d = desps[id];
+        const suaParte = d.divisao === 'dividido' ? d.valor/2 : d.valor;
+        const pagamentoLabel = d.formaPagamento === 'cartao' ? `Cartão · ${d.parcelas}x de ${brl(d.valorParcela)}` : 'Dinheiro/PIX';
+        const dataFmt = d.data ? new Date(d.data+'T00:00:00').toLocaleDateString('pt-BR') : '';
+        return `<div class="card">
+          <div class="desp-row">
+            <div>
+              <div class="desp-desc">${d.descricao}</div>
+              <div class="desp-meta">${dataFmt} · ${pagamentoLabel}</div>
+              <div class="tag">${categoriaLabel(d.categoria)}</div>
+            </div>
+            <div class="desp-valor">${brl(suaParte)}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  });
+}
+</script>
+</body>
+</html>
