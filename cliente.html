@@ -5,65 +5,76 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Meu painel</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
   :root{
-    --bg: #12141A; --surface: #1B1F27; --surface-2: #222733; --border: #2A2F3A;
-    --amber: #E8A33D; --amber-dim: #6b5326; --green: #4FBF7A; --green-dim: #1e3a2b;
-    --red: #E8615D; --red-dim: #3d2323; --text: #F0F1F3; --text-muted: #8B92A3; --text-faint:#565D6B;
-    --font-display: 'Space Grotesk', sans-serif; --font-body: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+    --accent: #3B5BDB; --accent-soft: #EEF1FE;
+    --bg: #F6F7FB; --surface: #FFFFFF; --border: #E5E7EE;
+    --text: #14161F; --text-muted: #6B7280; --text-faint: #9CA3AF;
+    --success: #12B76A; --success-soft: #ECFDF3;
+    --danger: #F04438; --danger-soft: #FEF3F2;
+    --font-display: 'Plus Jakarta Sans', sans-serif; --font-body: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+    --radius: 14px; --shadow-sm: 0 1px 2px rgba(16,24,40,.06);
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   body{ background: var(--bg); color: var(--text); font-family: var(--font-body); min-height:100vh; -webkit-font-smoothing:antialiased; }
-  header{ padding:24px 20px; border-bottom:1px solid var(--border); }
-  .brand{ font-family: var(--font-display); font-weight:700; font-size:18px; display:flex; align-items:center; gap:8px;}
-  .brand .dot{ width:8px; height:8px; border-radius:50%; background:var(--amber); }
-  .subtitle{ color:var(--text-muted); font-size:13px; margin-top:4px; }
 
-  main{ max-width:680px; margin:0 auto; padding:24px 20px 60px; }
+  header{ background:var(--surface); border-bottom:1px solid var(--border); padding:20px 20px; }
+  .brand{ display:flex; align-items:center; gap:10px; max-width:520px; margin:0 auto; }
+  .brand .mark{ width:32px; height:32px; border-radius:9px; background:var(--accent); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .brand .mark svg{ width:16px; height:16px; }
+  .brand .t{ font-family:var(--font-display); font-weight:700; font-size:15px; }
+  .brand .s{ font-size:12px; color:var(--text-muted); }
+
+  main{ max-width:520px; margin:0 auto; padding:24px 18px 60px; }
+
   .status-card{
-    background: var(--surface); border:1px solid var(--border); border-radius:16px; padding:24px; margin-bottom:20px;
-    text-align:center;
+    background: var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm);
+    padding:26px; margin-bottom:18px; text-align:center;
   }
-  .status-card .valor{ font-family:var(--font-mono); font-size:32px; font-weight:700; }
-  .status-card .valor.ok{ color: var(--green); }
-  .status-card .valor.late{ color: var(--red); }
-  .status-card .label{ color:var(--text-muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; margin-top:6px;}
+  .status-card .valor{ font-family:var(--font-mono); font-size:30px; font-weight:700; }
+  .status-card .valor.ok{ color: var(--success); }
+  .status-card .valor.late{ color: var(--danger); }
+  .status-card .label{ color:var(--text-muted); font-size:12px; text-transform:uppercase; letter-spacing:.06em; margin-top:6px; font-weight:600; }
 
-  h2{ font-family:var(--font-display); font-size:16px; margin:28px 0 12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; font-size:12px;}
+  h2{ font-family:var(--font-display); font-size:12px; margin:26px 0 12px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em; font-weight:700; }
 
   .weeks{ display:flex; gap:6px; flex-wrap:wrap; }
   .week-chip{
-    font-family: var(--font-mono); font-size:11px; padding:8px 12px; border-radius:7px;
-    border:1px solid var(--border); background:var(--surface-2); color:var(--text-muted);
+    font-family: var(--font-mono); font-size:11px; padding:9px 12px; border-radius:9px;
+    border:1.5px solid var(--border); background:var(--surface); color:var(--text-muted); font-weight:600;
   }
-  .week-chip.pago{ background: var(--green-dim); color: var(--green); border-color:transparent; }
-  .week-chip.atrasado{ background: var(--red-dim); color: var(--red); border-color:transparent; }
+  .week-chip.pago{ background: var(--success-soft); color: var(--success); border-color:transparent; }
+  .week-chip.atrasado{ background: var(--danger-soft); color: var(--danger); border-color:transparent; }
 
-  .card{ background: var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:10px; }
+  .card{ background: var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:10px; box-shadow:var(--shadow-sm); }
   .desp-row{ display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
-  .desp-desc{ font-weight:600; font-size:14px; }
+  .desp-desc{ font-weight:700; font-size:14px; }
   .desp-meta{ color:var(--text-muted); font-size:12px; margin-top:4px; }
   .desp-valor{ font-family:var(--font-mono); font-weight:700; font-size:14px; white-space:nowrap; }
-  .tag{ font-size:11px; padding:3px 8px; border-radius:6px; background:var(--surface-2); color:var(--text-muted); display:inline-block; margin-top:6px;}
+  .tag{ font-size:11px; padding:3px 8px; border-radius:6px; background:#F0F1F5; color:var(--text-muted); display:inline-block; margin-top:7px; font-weight:600;}
 
-  .empty{ text-align:center; padding:40px 20px; color:var(--text-faint); }
-  #not-found{ display:none; text-align:center; padding:80px 20px; color:var(--text-muted); }
+  .empty{ text-align:center; padding:32px 20px; color:var(--text-faint); font-size:13px; }
+  #not-found{ display:none; text-align:center; padding:100px 20px; }
+  #not-found .big{ font-family:var(--font-display); font-size:17px; font-weight:700; }
+  #not-found .small{ margin-top:8px; color:var(--text-muted); font-size:13px; }
 </style>
 </head>
 <body>
 
 <div id="not-found">
-  <div style="font-family:var(--font-display); font-size:18px; color:var(--text);">Link inválido</div>
-  <div style="margin-top:8px;">Peça um novo link pra quem administra o painel.</div>
+  <div class="big">Link inválido</div>
+  <div class="small">Peça um novo link pra quem administra o painel.</div>
 </div>
 
 <div id="content" style="display:none;">
   <header>
-    <div class="brand"><span class="dot"></span> Meu painel</div>
-    <div class="subtitle" id="sub-carro"></div>
+    <div class="brand">
+      <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M3 12l2-5.5A2 2 0 0 1 6.85 5h10.3a2 2 0 0 1 1.85 1.5L21 12M5 17h14M5 12h14M7 17v2M17 17v2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div><div class="t">Meu painel</div><div class="s" id="sub-carro"></div></div>
+    </div>
   </header>
   <main>
     <div class="status-card">
@@ -112,7 +123,6 @@ if(!locId){
     document.getElementById('content').style.display = 'block';
     document.getElementById('sub-carro').textContent = `${loc.carro || ''} ${loc.placa ? '· '+loc.placa : ''}`;
 
-    // status
     const pagamentos = loc.pagamentos || {};
     const semanas = gerarUltimasSemanas(6);
     let emAberto = 0;
@@ -130,7 +140,6 @@ if(!locId){
       labelEl.textContent = `${brl(loc.valorSemanal)} por semana`;
     }
 
-    // semanas
     document.getElementById('weeks-list').innerHTML = semanas.map(sem => {
       const pago = pagamentos[sem] && pagamentos[sem].pago;
       const atrasado = !pago && new Date(sem) < new Date(inicioSemanaISO());
@@ -138,7 +147,6 @@ if(!locId){
       return `<div class="week-chip ${cls}">${fmtSemana(sem)}</div>`;
     }).join('');
 
-    // despesas divididas ou dele
     const desps = loc.despesas || {};
     const ids = Object.keys(desps).filter(id => desps[id].divisao === 'dividido' || desps[id].divisao === 'ele');
     ids.sort((a,b) => (desps[b].data||'').localeCompare(desps[a].data||''));
