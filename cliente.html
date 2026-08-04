@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js"></script>
 <style>
   :root{
     --accent: #3B5BDB; --accent-soft: #EEF1FE;
@@ -80,6 +81,7 @@
     <div class="status-card">
       <div class="valor" id="status-valor">R$ 0</div>
       <div class="label" id="status-label">Situação</div>
+      <button id="btn-notif-cliente" onclick="ativarNotificacoesCliente()" style="margin-top:16px; background:var(--accent-soft); color:var(--accent); border:none; padding:9px 16px; border-radius:9px; font-weight:600; font-size:12.5px; cursor:pointer;">Ativar avisos de vencimento</button>
     </div>
 
     <h2>Últimas semanas</h2>
@@ -119,6 +121,36 @@ function proximoVencimento(diaVencimento){
 }
 function fmtSemana(iso){ const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}); }
 function categoriaLabel(c){ return { manutencao:'Manutenção', combustivel:'Combustível', documentacao:'Documentação', pneu:'Pneu', outro:'Outro' }[c] || c; }
+
+// ============================================
+// NOTIFICAÇÕES PUSH (LOCATÁRIO)
+// ============================================
+async function ativarNotificacoesCliente(){
+  const btn = document.getElementById('btn-notif-cliente');
+  try{
+    if(!locId){ return; }
+    if(!('Notification' in window) || !('serviceWorker' in navigator)){
+      alert('Seu navegador não suporta notificações push.');
+      return;
+    }
+    const permissao = await Notification.requestPermission();
+    if(permissao !== 'granted'){
+      alert('Permissão de notificação negada.');
+      return;
+    }
+    const reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    const messaging = firebase.messaging();
+    const token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: reg });
+    if(token){
+      await db.ref('locatarios/' + locId + '/pushToken').set(token);
+      btn.textContent = 'Avisos ativos ✓';
+      btn.disabled = true;
+    }
+  } catch(err){
+    console.error(err);
+    alert('Não deu pra ativar os avisos agora. Tenta de novo em instantes.');
+  }
+}
 
 const params = new URLSearchParams(location.search);
 const locId = params.get('id');
