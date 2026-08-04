@@ -390,7 +390,7 @@
 
           <div class="grid-2">
             <div class="panel">
-              <div class="panel-head"><h3>Recebimentos por semana</h3><span class="hint">Últimas 6 semanas</span></div>
+              <div class="panel-head"><h3>Recebimentos por vencimento</h3><span class="hint">Últimos 6 vencimentos</span></div>
               <div class="chart" id="chart"></div>
             </div>
             <div class="panel">
@@ -654,15 +654,6 @@ function gerarVencimentos(diaVencimento, n=6){
   for(let i=0; i<n; i++){ const d = new Date(maisRecente); d.setDate(maisRecente.getDate() - i*7); datas.push(toLocalISO(d)); }
   return datas.reverse();
 }
-// Semanas de calendário (segunda a domingo), usadas só pra agrupar o gráfico de recebimentos
-function gerarSemanasCalendario(n=6){
-  const hoje = new Date(); hoje.setHours(0,0,0,0);
-  const diaSemana = (hoje.getDay() + 6) % 7; // 0 = segunda
-  const segunda = new Date(hoje); segunda.setDate(hoje.getDate() - diaSemana);
-  const semanas = [];
-  for(let i=0; i<n; i++){ const d = new Date(segunda); d.setDate(segunda.getDate() - i*7); semanas.push(toLocalISO(d)); }
-  return semanas.reverse();
-}
 function fmtSemana(iso){ return parseLocal(iso).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}); }
 function iniciais(nome){ return (nome||'?').trim().split(/\s+/).slice(0,2).map(p=>p[0]).join('').toUpperCase(); }
 function categoriaLabel(c){ return { manutencao:'Manutenção', combustivel:'Combustível', documentacao:'Documentação', pneu:'Pneu', outro:'Outro' }[c] || c; }
@@ -674,8 +665,11 @@ function renderDashboard(){
   const mes = mesAtual();
   const hoje = hojeISO();
   let recebido = 0, aberto = 0, despesasMes = 0;
-  const semanasCal = gerarSemanasCalendario(6);
-  const porSemana = {}; semanasCal.forEach(s => porSemana[s] = 0);
+  // usa o dia de vencimento do primeiro locatário cadastrado como referência do gráfico
+  const idsLoc = Object.keys(locatarios);
+  const diaRef = idsLoc.length ? (Number(locatarios[idsLoc[0]].diaVencimento) || 0) : 0;
+  const semanasChart = gerarVencimentos(diaRef, 6);
+  const porData = {}; semanasChart.forEach(s => porData[s] = 0);
   const atividades = [];
 
   Object.keys(locatarios).forEach(id => {
@@ -684,16 +678,12 @@ function renderDashboard(){
     Object.keys(pagamentos).forEach(sem => {
       const p = pagamentos[sem];
       if(p.pago){
+        const valor = Number(p.valor)||0;
+        const mesRef = p.dataPagamento ? toLocalISO(new Date(p.dataPagamento)).slice(0,7) : sem.slice(0,7);
+        if(mesRef === mes) recebido += valor;
+        if(porData.hasOwnProperty(sem)) porData[sem] += valor;
         if(p.dataPagamento){
-          const diaPagto = toLocalISO(new Date(p.dataPagamento));
-          if(diaPagto.startsWith(mes)) recebido += Number(p.valor)||0;
-          // agrupa no bucket da semana de calendário correspondente ao dia do pagamento
-          let semanaAlvo = semanasCal[0];
-          semanasCal.forEach(s => { if(s <= diaPagto) semanaAlvo = s; });
-          if(porSemana.hasOwnProperty(semanaAlvo)) porSemana[semanaAlvo] += Number(p.valor)||0;
           atividades.push({ tipo:'pago', data: p.dataPagamento, texto: `<b>${loc.nome}</b> pagou o vencimento de ${fmtSemana(sem)}` });
-        } else {
-          if(sem.startsWith(mes)) recebido += Number(p.valor)||0;
         }
       }
     });
@@ -721,9 +711,9 @@ function renderDashboard(){
   document.getElementById('g-despesas').textContent = brl(despesasMes);
   document.getElementById('g-saldo').textContent = brl(saldo);
 
-  const maxVal = Math.max(...Object.values(porSemana), 1);
-  document.getElementById('chart').innerHTML = semanasCal.map(s => {
-    const v = porSemana[s];
+  const maxVal = Math.max(...Object.values(porData), 1);
+  document.getElementById('chart').innerHTML = semanasChart.map(s => {
+    const v = porData[s];
     const h = Math.max(4, (v/maxVal)*100);
     return `<div class="chart-col"><div class="chart-bar" style="height:${h}%;" title="${brl(v)}"></div><div class="chart-label">${fmtSemana(s)}</div></div>`;
   }).join('');
