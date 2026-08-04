@@ -633,19 +633,37 @@ function iniciarApp(){
 // HELPERS
 // ============================================
 function brl(v){ return 'R$ ' + (Number(v)||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
-function inicioSemanaISO(d = new Date()){
-  const dt = new Date(d); const dia = dt.getDay();
-  dt.setDate(dt.getDate() - dia); dt.setHours(0,0,0,0);
-  return dt.toISOString().slice(0,10);
+// Formata uma data local (sem depender de UTC, que causava o desalinhamento de 1 dia)
+function toLocalISO(d){
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
 }
-function mesAtual(){ return new Date().toISOString().slice(0,7); }
-function gerarUltimasSemanas(n=6){
-  const semanas = []; const hoje = new Date();
-  const domingo = new Date(hoje); domingo.setDate(hoje.getDate() - hoje.getDay());
-  for(let i=0; i<n; i++){ const d = new Date(domingo); d.setDate(domingo.getDate() - i*7); semanas.push(d.toISOString().slice(0,10)); }
+function parseLocal(iso){ return new Date(iso + 'T00:00:00'); }
+function hojeISO(){ return toLocalISO(new Date()); }
+function mesAtual(){ return hojeISO().slice(0,7); }
+
+// Gera as últimas N datas de vencimento respeitando o dia da semana cadastrado pro locatário
+// (0=domingo, 1=segunda ... 6=sábado). A mais recente é a última ocorrência até hoje (inclusive).
+function gerarVencimentos(diaVencimento, n=6){
+  diaVencimento = Number(diaVencimento);
+  if(isNaN(diaVencimento)) diaVencimento = 0;
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const diff = (hoje.getDay() - diaVencimento + 7) % 7;
+  const maisRecente = new Date(hoje); maisRecente.setDate(hoje.getDate() - diff);
+  const datas = [];
+  for(let i=0; i<n; i++){ const d = new Date(maisRecente); d.setDate(maisRecente.getDate() - i*7); datas.push(toLocalISO(d)); }
+  return datas.reverse();
+}
+// Semanas de calendário (segunda a domingo), usadas só pra agrupar o gráfico de recebimentos
+function gerarSemanasCalendario(n=6){
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const diaSemana = (hoje.getDay() + 6) % 7; // 0 = segunda
+  const segunda = new Date(hoje); segunda.setDate(hoje.getDate() - diaSemana);
+  const semanas = [];
+  for(let i=0; i<n; i++){ const d = new Date(segunda); d.setDate(segunda.getDate() - i*7); semanas.push(toLocalISO(d)); }
   return semanas.reverse();
 }
-function fmtSemana(iso){ const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}); }
+function fmtSemana(iso){ return parseLocal(iso).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}); }
 function iniciais(nome){ return (nome||'?').trim().split(/\s+/).slice(0,2).map(p=>p[0]).join('').toUpperCase(); }
 function categoriaLabel(c){ return { manutencao:'Manutenção', combustivel:'Combustível', documentacao:'Documentação', pneu:'Pneu', outro:'Outro' }[c] || c; }
 
@@ -654,26 +672,35 @@ function categoriaLabel(c){ return { manutencao:'Manutenção', combustivel:'Com
 // ============================================
 function renderDashboard(){
   const mes = mesAtual();
+  const hoje = hojeISO();
   let recebido = 0, aberto = 0, despesasMes = 0;
-  const semanas = gerarUltimasSemanas(6);
-  const porSemana = {}; semanas.forEach(s => porSemana[s] = 0);
+  const semanasCal = gerarSemanasCalendario(6);
+  const porSemana = {}; semanasCal.forEach(s => porSemana[s] = 0);
   const atividades = [];
 
   Object.keys(locatarios).forEach(id => {
     const loc = locatarios[id];
     const pagamentos = loc.pagamentos || {};
     Object.keys(pagamentos).forEach(sem => {
-      if(pagamentos[sem].pago){
-        if(sem.startsWith(mes)) recebido += Number(pagamentos[sem].valor)||0;
-        if(porSemana.hasOwnProperty(sem)) porSemana[sem] += Number(pagamentos[sem].valor)||0;
-        if(pagamentos[sem].dataPagamento){
-          atividades.push({ tipo:'pago', data: pagamentos[sem].dataPagamento, texto: `<b>${loc.nome}</b> pagou a semana de ${fmtSemana(sem)}` });
+      const p = pagamentos[sem];
+      if(p.pago){
+        if(p.dataPagamento){
+          const diaPagto = toLocalISO(new Date(p.dataPagamento));
+          if(diaPagto.startsWith(mes)) recebido += Number(p.valor)||0;
+          // agrupa no bucket da semana de calendário correspondente ao dia do pagamento
+          let semanaAlvo = semanasCal[0];
+          semanasCal.forEach(s => { if(s <= diaPagto) semanaAlvo = s; });
+          if(porSemana.hasOwnProperty(semanaAlvo)) porSemana[semanaAlvo] += Number(p.valor)||0;
+          atividades.push({ tipo:'pago', data: p.dataPagamento, texto: `<b>${loc.nome}</b> pagou o vencimento de ${fmtSemana(sem)}` });
+        } else {
+          if(sem.startsWith(mes)) recebido += Number(p.valor)||0;
         }
       }
     });
-    semanas.forEach(s => {
-      const pago = pagamentos[s] && pagamentos[s].pago;
-      if(!pago && new Date(s) < new Date(inicioSemanaISO())) aberto += Number(loc.valorSemanal)||0;
+    const vencimentos = gerarVencimentos(loc.diaVencimento, 6);
+    vencimentos.forEach(v => {
+      const pago = pagamentos[v] && pagamentos[v].pago;
+      if(!pago && v < hoje) aberto += Number(loc.valorSemanal)||0;
     });
     const desps = loc.despesas || {};
     Object.keys(desps).forEach(dId => {
@@ -695,7 +722,7 @@ function renderDashboard(){
   document.getElementById('g-saldo').textContent = brl(saldo);
 
   const maxVal = Math.max(...Object.values(porSemana), 1);
-  document.getElementById('chart').innerHTML = semanas.map(s => {
+  document.getElementById('chart').innerHTML = semanasCal.map(s => {
     const v = porSemana[s];
     const h = Math.max(4, (v/maxVal)*100);
     return `<div class="chart-col"><div class="chart-bar" style="height:${h}%;" title="${brl(v)}"></div><div class="chart-label">${fmtSemana(s)}</div></div>`;
@@ -736,15 +763,16 @@ function renderLocatarios(){
   body.innerHTML = ids.map(id => {
     const loc = locatarios[id];
     const pagamentos = loc.pagamentos || {};
-    const semanas = gerarUltimasSemanas(6);
-    const semanasEmAberto = semanas.filter(s => !(pagamentos[s] && pagamentos[s].pago) && new Date(s) < new Date(inicioSemanaISO())).length;
+    const hoje = hojeISO();
+    const semanas = gerarVencimentos(loc.diaVencimento, 6);
+    const semanasEmAberto = semanas.filter(s => !(pagamentos[s] && pagamentos[s].pago) && s < hoje).length;
     const emDia = semanasEmAberto === 0;
 
     const dotsHtml = semanas.map(sem => {
       const pago = pagamentos[sem] && pagamentos[sem].pago;
-      const atrasado = !pago && new Date(sem) < new Date(inicioSemanaISO());
+      const atrasado = !pago && sem < hoje;
       const cls = pago ? 'pago' : (atrasado ? 'atrasado' : '');
-      return `<div class="dot ${cls}" title="${fmtSemana(sem)}" onclick="event.stopPropagation(); toggleSemana('${id}','${sem}')"></div>`;
+      return `<div class="dot ${cls}" title="Vencimento ${fmtSemana(sem)}" onclick="event.stopPropagation(); toggleSemana('${id}','${sem}')"></div>`;
     }).join('');
 
     return `<tr onclick="abrirDetalhes('${id}')" style="cursor:pointer;">
@@ -801,10 +829,11 @@ function renderDetalhes(id){
   document.getElementById('det-link').textContent = link;
 
   const pagamentos = loc.pagamentos || {};
-  const semanas = gerarUltimasSemanas(8);
+  const hoje = hojeISO();
+  const semanas = gerarVencimentos(loc.diaVencimento, 8);
   document.getElementById('det-weeks').innerHTML = semanas.map(sem => {
     const pago = pagamentos[sem] && pagamentos[sem].pago;
-    const atrasado = !pago && new Date(sem) < new Date(inicioSemanaISO());
+    const atrasado = !pago && sem < hoje;
     const cls = pago ? 'pago' : (atrasado ? 'atrasado' : '');
     return `<div class="week-chip ${cls}" onclick="toggleSemana('${id}','${sem}')">${fmtSemana(sem)}</div>`;
   }).join('');
