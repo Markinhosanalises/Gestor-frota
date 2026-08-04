@@ -18,5 +18,8 @@ const firebaseConfig = {
 // PIN de acesso do painel admin (troque por um PIN seu)
 const ADMIN_PIN = "891322";
 
+// Chave VAPID pra notificações push (Firebase Console > Configurações do projeto > Cloud Messaging > Certificados push da Web)
+const FCM_VAPID_KEY = "COLE_AQUI_A_CHAVE_VAPID_PUBLICA";
+
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
