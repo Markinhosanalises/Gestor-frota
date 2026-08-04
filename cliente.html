@@ -83,6 +83,7 @@
     </div>
 
     <h2>Últimas semanas</h2>
+    <div class="cell-sub" id="proximo-venc" style="color:var(--text-muted); font-size:12.5px; margin-bottom:10px;"></div>
     <div class="weeks" id="weeks-list"></div>
 
     <h2>Despesas divididas com você</h2>
@@ -107,6 +108,14 @@ function gerarVencimentos(diaVencimento, n=6){
   const datas = [];
   for(let i=0; i<n; i++){ const d = new Date(maisRecente); d.setDate(maisRecente.getDate() - i*7); datas.push(toLocalISO(d)); }
   return datas.reverse();
+}
+function proximoVencimento(diaVencimento){
+  diaVencimento = Number(diaVencimento);
+  if(isNaN(diaVencimento)) diaVencimento = 0;
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const diff = (diaVencimento - hoje.getDay() + 7) % 7;
+  const proximo = new Date(hoje); proximo.setDate(hoje.getDate() + diff);
+  return toLocalISO(proximo);
 }
 function fmtSemana(iso){ const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}); }
 function categoriaLabel(c){ return { manutencao:'Manutenção', combustivel:'Combustível', documentacao:'Documentação', pneu:'Pneu', outro:'Outro' }[c] || c; }
@@ -145,6 +154,7 @@ if(!locId){
       labelEl.textContent = `${brl(loc.valorSemanal)} por semana`;
     }
 
+    document.getElementById('proximo-venc').textContent = `Próximo vencimento: ${fmtSemana(proximoVencimento(loc.diaVencimento))}`;
     document.getElementById('weeks-list').innerHTML = semanas.map(sem => {
       const pago = pagamentos[sem] && pagamentos[sem].pago;
       const atrasado = !pago && sem < hoje;
